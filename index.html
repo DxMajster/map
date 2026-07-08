@@ -65,9 +65,46 @@
   .toggle-group button.active{background:var(--accent);color:#fff;}
 
   .colorset{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
-  .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
+  .swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
   .swatch:hover{transform:scale(1.12);}
   .swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--accent);}
+
+  /* color wheel */
+  .wheel-row{display:flex;gap:16px;align-items:center;margin-bottom:12px;}
+  .wheel-wrap{position:relative;width:118px;height:118px;flex-shrink:0;}
+  .wheel{
+    width:118px;height:118px;border-radius:50%;cursor:crosshair;
+    background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+    box-shadow:0 0 0 3px #0B1220, 0 0 0 4px var(--line);
+    position:relative;
+  }
+  .wheel::before{
+    content:'';position:absolute;inset:0;border-radius:50%;
+    background:radial-gradient(circle at center, #fff 0%, rgba(255,255,255,0) 72%);
+    pointer-events:none;
+  }
+  .wheel-cursor{
+    position:absolute;width:14px;height:14px;border-radius:50%;
+    border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.4);
+    transform:translate(-50%,-50%);pointer-events:none;
+  }
+  .wheel-side{display:flex;flex-direction:column;gap:8px;flex:1;}
+  .wheel-preview{width:100%;height:34px;border-radius:8px;border:1px solid var(--line);}
+  .wheel-hex{display:flex;gap:6px;align-items:center;}
+  .wheel-hex input{padding:7px 9px;font-size:13px;font-family:'JetBrains Mono',monospace;}
+
+  /* map label with technician name */
+  .tech-label{
+    background:rgba(16,24,43,0.92)!important;color:#fff!important;border:none!important;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25)!important;
+    font-family:'Inter',sans-serif;font-weight:600;font-size:12.5px;padding:4px 9px!important;
+    border-radius:6px!important;
+  }
+  .tech-label::before{display:none!important;}
+
+  .precision-note{font-size:12px;color:var(--text-dim);line-height:1.5;margin-top:8px;}
+  .precision-note b{color:var(--text-mid);}
+  .precision-note.has-key{color:var(--good);}
 
   button.btn{
     width:100%;padding:11px;border-radius:8px;border:none;font-family:inherit;
@@ -197,15 +234,27 @@
         </label>
 
         <div class="block-title" style="margin-top:2px;">Couleur du repère</div>
+        <div class="wheel-row">
+          <div class="wheel-wrap">
+            <div class="wheel" id="wheel"></div>
+            <div class="wheel-cursor" id="wheel-cursor"></div>
+          </div>
+          <div class="wheel-side">
+            <div class="wheel-preview" id="wheel-preview"></div>
+            <div class="wheel-hex">
+              <input type="text" id="f-hex" value="#4C8DFF" maxlength="7">
+            </div>
+          </div>
+        </div>
         <div class="colorset" id="colorset"></div>
 
-        <div class="api-toggle" id="api-toggle" style="margin-top:10px;">⚙️ Option avancée : isochrones réelles (temps de trajet)</div>
-        <div class="api-box" id="api-box">
+        <div class="block" id="precision-block" style="display:none;margin-top:4px;">
+          <div class="block-title">Précision du temps de trajet</div>
           <label class="field" style="margin-bottom:6px;">
-            <span>Clé API OpenRouteService (facultatif)</span>
+            <span>Clé API OpenRouteService (recommandée)</span>
             <input type="password" id="f-orskey" placeholder="Collez votre clé ici">
           </label>
-          <small>Sans clé, le temps de trajet est <b>estimé</b> (cercle approximatif basé sur une vitesse moyenne route). Avec une clé <a href="https://openrouteservice.org/dev/#/signup" target="_blank">OpenRouteService</a> (gratuite), la zone réelle accessible en voiture est calculée précisément.</small>
+          <div class="precision-note" id="precision-note">Sans clé, la zone est une <b>estimation</b> (forme approximative). Avec une clé <a href="https://openrouteservice.org/dev/#/signup" target="_blank" style="color:var(--accent);">OpenRouteService</a> (gratuite, 2 min d'inscription), la zone réelle accessible en voiture est calculée précisément à partir du réseau routier — comme sur les sites d'annonces immobilières.</div>
         </div>
 
         <button class="btn btn-primary" id="btn-add" style="margin-top:16px;" disabled>Ajouter le technicien</button>
@@ -277,6 +326,8 @@ PALETTE.forEach((c, i) => {
     document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
     sw.classList.add('selected');
     selectedColor = c;
+    wheelPreview.style.background = c;
+    fHex.value = c.toUpperCase();
   });
   colorsetEl.appendChild(sw);
 });
@@ -294,6 +345,7 @@ function setMode(mode){
   currentMode = mode;
   modeKmBtn.classList.toggle('active', mode === 'km');
   modeTimeBtn.classList.toggle('active', mode === 'time');
+  document.getElementById('precision-block').style.display = mode === 'time' ? 'block' : 'none';
   if(mode === 'km'){
     valueLabel.textContent = "Rayon en kilomètres";
     fValue.value = 100;
@@ -303,10 +355,72 @@ function setMode(mode){
   }
 }
 
-/* ============================= ADVANCED API BOX ============================= */
-const apiToggle = document.getElementById('api-toggle');
-const apiBox = document.getElementById('api-box');
-apiToggle.addEventListener('click', () => apiBox.classList.toggle('open'));
+/* ============================= COLOR WHEEL ============================= */
+const wheelEl = document.getElementById('wheel');
+const wheelCursor = document.getElementById('wheel-cursor');
+const wheelPreview = document.getElementById('wheel-preview');
+const fHex = document.getElementById('f-hex');
+const WHEEL_SIZE = 118, WHEEL_R = WHEEL_SIZE / 2;
+
+function hsvToHex(h, s, v){
+  s/=100; v/=100;
+  const c = v*s, x = c*(1-Math.abs((h/60)%2-1)), m = v-c;
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;} else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;} else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  const toHex = n => Math.round((n+m)*255).toString(16).padStart(2,'0');
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+function setWheelCursorPos(angleDeg, distRatio){
+  const rad = angleDeg * Math.PI/180;
+  const dist = distRatio * WHEEL_R;
+  const x = WHEEL_R + dist * Math.cos(rad);
+  const y = WHEEL_R + dist * Math.sin(rad);
+  wheelCursor.style.left = x + 'px';
+  wheelCursor.style.top = y + 'px';
+}
+
+function updateColorSelection(hex, movecursor){
+  selectedColor = hex;
+  wheelPreview.style.background = hex;
+  fHex.value = hex.toUpperCase();
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+}
+
+function pickFromWheel(clientX, clientY){
+  const rect = wheelEl.getBoundingClientRect();
+  const dx = clientX - (rect.left + rect.width/2);
+  const dy = clientY - (rect.top + rect.height/2);
+  let dist = Math.sqrt(dx*dx + dy*dy);
+  const ratio = Math.min(dist, WHEEL_R) / WHEEL_R;
+  let angle = Math.atan2(dy, dx) * 180/Math.PI;
+  if(angle < 0) angle += 360;
+  const hex = hsvToHex(angle, ratio*100, 100);
+  setWheelCursorPos(angle, ratio);
+  updateColorSelection(hex);
+}
+
+let wheelDragging = false;
+wheelEl.addEventListener('mousedown', e => { wheelDragging = true; pickFromWheel(e.clientX, e.clientY); });
+window.addEventListener('mousemove', e => { if(wheelDragging) pickFromWheel(e.clientX, e.clientY); });
+window.addEventListener('mouseup', () => wheelDragging = false);
+wheelEl.addEventListener('touchstart', e => { pickFromWheel(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
+wheelEl.addEventListener('touchmove', e => { pickFromWheel(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
+
+fHex.addEventListener('change', () => {
+  let v = fHex.value.trim();
+  if(!v.startsWith('#')) v = '#' + v;
+  if(/^#[0-9A-Fa-f]{6}$/.test(v)){
+    updateColorSelection(v);
+  } else {
+    fHex.value = selectedColor;
+  }
+});
+
+// init cursor at first preset color position
+setWheelCursorPos(215, 0.85);
+wheelPreview.style.background = selectedColor;
 
 /* ============================= LOCATE STATUS ============================= */
 const statusEl = document.getElementById('locate-status');
@@ -431,7 +545,11 @@ async function drawTechnician(tech){
   const marker = L.circleMarker([tech.lat, tech.lng], {
     radius: 7, color:'#fff', weight:2, fillColor: tech.color, fillOpacity:1
   }).bindPopup(`<div class="popup-title">${escapeHtml(tech.name)}</div><div class="popup-sub">${escapeHtml(tech.city)} — ${tech.mode === 'km' ? tech.value + ' km' : tech.value + ' min de trajet'}</div>`);
+  marker.bindTooltip(escapeHtml(tech.name), {
+    permanent: true, direction: 'right', offset: [10, 0], className: 'tech-label'
+  });
   marker.addTo(markersGroup);
+  marker.openTooltip();
   tech.layers.marker = marker;
 
   if(tech.mode === 'km'){
@@ -459,12 +577,32 @@ async function drawTechnician(tech){
   }
 }
 
+function destinationPoint(lat, lng, bearingDeg, distanceKm){
+  const R = 6371;
+  const brng = bearingDeg * Math.PI/180;
+  const lat1 = lat * Math.PI/180, lng1 = lng * Math.PI/180;
+  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(distanceKm/R) + Math.cos(lat1)*Math.sin(distanceKm/R)*Math.cos(brng));
+  const lng2 = lng1 + Math.atan2(Math.sin(brng)*Math.sin(distanceKm/R)*Math.cos(lat1), Math.cos(distanceKm/R)-Math.sin(lat1)*Math.sin(lat2));
+  return [lat2*180/Math.PI, lng2*180/Math.PI];
+}
+
 function drawEstimateCircle(tech){
   const km = estimateRadiusFromMinutes(tech.value);
-  return L.circle([tech.lat, tech.lng], {
-    radius: km * 1000,
+  const N = 28;
+  const points = [];
+  for(let i=0;i<N;i++){
+    const angle = (360/N)*i;
+    // variation déterministe pour éviter un cercle parfait trompeur (le réseau routier n'est jamais un disque)
+    const noise = 1
+      + 0.14*Math.sin((angle*0.09) + tech.lat*4)
+      + 0.09*Math.sin((angle*0.24) - tech.lng*6)
+      + 0.05*Math.sin(angle*0.55 + tech.id);
+    const r = km * Math.max(0.55, noise);
+    points.push(destinationPoint(tech.lat, tech.lng, angle, r));
+  }
+  return L.polygon(points, {
     color: tech.color, weight: 2, dashArray: '6 6',
-    fillColor: tech.color, fillOpacity: 0.10
+    fillColor: tech.color, fillOpacity: 0.10, lineJoin: 'round'
   }).addTo(zonesGroup);
 }
 
@@ -599,6 +737,22 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const orsInput = document.getElementById('f-orskey');
+  const note = document.getElementById('precision-note');
+  if(orsInput){
+    orsInput.addEventListener('input', () => {
+      if(orsInput.value.trim()){
+        note.classList.add('has-key');
+        note.innerHTML = "✓ Clé détectée — les prochaines zones ajoutées en mode « temps de trajet » utiliseront le vrai réseau routier.";
+      } else {
+        note.classList.remove('has-key');
+        note.innerHTML = "Sans clé, la zone est une <b>estimation</b> (forme approximative). Avec une clé <a href=\"https://openrouteservice.org/dev/#/signup\" target=\"_blank\" style=\"color:var(--accent);\">OpenRouteService</a> (gratuite, 2 min d'inscription), la zone réelle accessible en voiture est calculée précisément à partir du réseau routier — comme sur les sites d'annonces immobilières.";
+      }
+    });
+  }
+});
 
 renderList();
 </script>
