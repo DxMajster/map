@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zones d'intervention — Techniciens</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-sidebar: #10182B;
+    --bg-sidebar-2: #16213A;
+    --bg-app: #EEF1F6;
+    --line: #26314A;
+    --text-hi: #F3F5F9;
+    --text-mid: #A9B3C9;
+    --text-dim: #6B7690;
+    --accent: #4C8DFF;
+    --accent-dim: #2C4A82;
+    --good: #33C481;
+    --warn: #E8A33D;
+    --danger: #E5586B;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;font-family:'Inter',system-ui,sans-serif;background:var(--bg-app);color:var(--text-hi);}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden;}
+
+  /* ---------- SIDEBAR ---------- */
+  #sidebar{
+    width:400px;min-width:400px;
+    background:linear-gradient(180deg,var(--bg-sidebar) 0%, var(--bg-sidebar-2) 100%);
+    color:var(--text-hi);
+    display:flex;flex-direction:column;
+    box-shadow:2px 0 24px rgba(0,0,0,0.25);
+    z-index:10;
+  }
+  #sidebar-scroll{overflow-y:auto;flex:1;padding:0 22px 22px 22px;}
+  #sidebar-scroll::-webkit-scrollbar{width:8px;}
+  #sidebar-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+
+  .brand{padding:24px 22px 16px 22px;border-bottom:1px solid var(--line);}
+  .brand-mark{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;}
+  .brand h1{font-size:19px;margin:6px 0 4px 0;font-weight:700;letter-spacing:-0.2px;}
+  .brand p{margin:0;font-size:12.5px;color:var(--text-mid);line-height:1.5;}
+
+  .block{margin-top:22px;}
+  .block-title{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--text-dim);font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+
+  label.field{display:block;margin-bottom:12px;}
+  label.field span{display:block;font-size:12.5px;color:var(--text-mid);margin-bottom:6px;font-weight:500;}
+  input[type=text], input[type=number], input[type=password]{
+    width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);
+    background:#0B1220;color:var(--text-hi);font-size:14px;font-family:inherit;outline:none;
+    transition:border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, input[type=password]:focus{border-color:var(--accent);}
+  input::placeholder{color:var(--text-dim);}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .toggle-group{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .toggle-group button{flex:1;padding:9px 6px;background:transparent;color:var(--text-mid);border:none;font-size:13px;font-family:inherit;cursor:pointer;font-weight:500;}
+  .toggle-group button.active{background:var(--accent);color:#fff;}
+
+  .colorset{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+  .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
+  .swatch:hover{transform:scale(1.12);}
+  .swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--accent);}
+
+  button.btn{
+    width:100%;padding:11px;border-radius:8px;border:none;font-family:inherit;
+    font-size:14px;font-weight:600;cursor:pointer;transition:filter .15s, transform .05s;
+  }
+  button.btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-primary:disabled{background:#33405e;color:var(--text-dim);cursor:not-allowed;}
+  .btn-ghost{background:transparent;border:1px solid var(--line)!important;color:var(--text-mid);}
+  .btn-ghost:hover{border-color:var(--accent)!important;color:var(--text-hi);}
+  .btn-danger-outline{background:transparent;border:1px solid #4a2530!important;color:var(--danger);}
+  .btn-danger-outline:hover{background:rgba(229,88,107,0.1);}
+
+  .locate-status{font-size:12.5px;padding:9px 10px;border-radius:8px;margin-top:8px;display:flex;gap:8px;align-items:flex-start;line-height:1.4;}
+  .locate-status.idle{background:rgba(76,141,255,0.08);color:var(--text-mid);}
+  .locate-status.ok{background:rgba(51,196,129,0.12);color:var(--good);}
+  .locate-status.err{background:rgba(229,88,107,0.12);color:var(--danger);}
+  .locate-status.wait{background:rgba(232,163,61,0.12);color:var(--warn);}
+
+  .place-mode-hint{font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.5;}
+
+  .api-toggle{font-size:12px;color:var(--text-dim);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;}
+  .api-toggle:hover{color:var(--text-mid);}
+  .api-box{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:8px;display:none;}
+  .api-box.open{display:block;}
+  .api-box small{color:var(--text-dim);display:block;margin-top:6px;line-height:1.5;}
+  .api-box a{color:var(--accent);}
+
+  /* list of technicians */
+  #tech-list{display:flex;flex-direction:column;gap:8px;}
+  .tech-card{
+    background:#0D1526;border:1px solid var(--line);border-radius:10px;padding:12px 12px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .tech-card-top{display:flex;align-items:center;gap:10px;}
+  .tech-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,0.06);}
+  .tech-name{font-weight:600;font-size:14px;flex:1;}
+  .tech-meta{font-size:12px;color:var(--text-mid);padding-left:24px;}
+  .tech-meta b{color:var(--text-hi);font-weight:600;}
+  .tech-actions{display:flex;gap:6px;padding-left:24px;margin-top:2px;}
+  .icon-btn{
+    background:transparent;border:1px solid var(--line);color:var(--text-mid);
+    border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;
+    display:flex;align-items:center;gap:4px;
+  }
+  .icon-btn:hover{border-color:var(--accent);color:var(--text-hi);}
+  .icon-btn.on{color:var(--good);border-color:rgba(51,196,129,0.4);}
+  .icon-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+
+  .empty-state{font-size:13px;color:var(--text-dim);text-align:center;padding:22px 10px;border:1px dashed var(--line);border-radius:10px;}
+
+  .footer-actions{display:flex;gap:8px;padding-top:14px;border-top:1px solid var(--line);margin-top:18px;}
+  .footer-actions button{flex:1;}
+
+  /* ---------- MAP ---------- */
+  #map-wrap{flex:1;position:relative;}
+  #map{height:100%;width:100%;}
+  #map.placing{cursor:crosshair;}
+
+  .place-banner{
+    position:absolute;top:16px;left:50%;transform:translateX(-50%);
+    background:#10182B;color:#fff;padding:10px 18px;border-radius:30px;
+    font-size:13.5px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,0.25);
+    z-index:1000;display:none;align-items:center;gap:10px;
+  }
+  .place-banner.show{display:flex;}
+  .place-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%{opacity:.3}50%{opacity:1}100%{opacity:.3}}
+  .place-banner button{background:rgba(255,255,255,0.12);border:none;color:#fff;border-radius:16px;padding:4px 12px;font-size:12px;cursor:pointer;}
+
+  .leaflet-popup-content-wrapper{border-radius:10px;font-family:'Inter',sans-serif;}
+  .popup-title{font-weight:700;font-size:14px;margin-bottom:2px;}
+  .popup-sub{font-size:12px;color:#666;}
+
+  .stat-pill{
+    position:absolute;bottom:16px;left:16px;background:rgba(16,24,43,0.92);color:#fff;
+    padding:9px 14px;border-radius:10px;font-size:12.5px;z-index:1000;box-shadow:0 4px 14px rgba(0,0,0,0.2);
+  }
+  .stat-pill b{color:var(--accent);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">Couverture terrain</div>
+      <h1>Zones d'intervention</h1>
+      <p>Placez vos techniciens sur la carte et définissez leur rayon d'action, en kilomètres ou en temps de trajet.</p>
+    </div>
+
+    <div id="sidebar-scroll">
+
+      <!-- FORM -->
+      <div class="block">
+        <div class="block-title">Ajouter un technicien</div>
+
+        <label class="field">
+          <span>Nom du technicien</span>
+          <input type="text" id="f-name" placeholder="Ex : Thomas Papillon">
+        </label>
+
+        <label class="field">
+          <span>Ville de rattachement</span>
+          <input type="text" id="f-city" placeholder="Ex : Dijon">
+        </label>
+
+        <div class="row2" style="margin-bottom:10px;">
+          <button class="btn btn-ghost" id="btn-search-city">📍 Chercher la ville</button>
+          <button class="btn btn-ghost" id="btn-place-map">🗺️ Cliquer sur la carte</button>
+        </div>
+
+        <div id="locate-status" class="locate-status idle">Indiquez une ville ou cliquez sur la carte pour positionner le technicien.</div>
+
+        <div class="block" style="margin-top:16px;">
+          <div class="block-title">Type de rayon d'action</div>
+          <div class="toggle-group">
+            <button id="mode-km" class="active">Distance (km)</button>
+            <button id="mode-time">Temps de trajet</button>
+          </div>
+        </div>
+
+        <label class="field" style="margin-top:12px;">
+          <span id="value-label">Rayon en kilomètres</span>
+          <input type="number" id="f-value" value="100" min="1" step="1">
+        </label>
+
+        <div class="block-title" style="margin-top:2px;">Couleur du repère</div>
+        <div class="colorset" id="colorset"></div>
+
+        <div class="api-toggle" id="api-toggle" style="margin-top:10px;">⚙️ Option avancée : isochrones réelles (temps de trajet)</div>
+        <div class="api-box" id="api-box">
+          <label class="field" style="margin-bottom:6px;">
+            <span>Clé API OpenRouteService (facultatif)</span>
+            <input type="password" id="f-orskey" placeholder="Collez votre clé ici">
+          </label>
+          <small>Sans clé, le temps de trajet est <b>estimé</b> (cercle approximatif basé sur une vitesse moyenne route). Avec une clé <a href="https://openrouteservice.org/dev/#/signup" target="_blank">OpenRouteService</a> (gratuite), la zone réelle accessible en voiture est calculée précisément.</small>
+        </div>
+
+        <button class="btn btn-primary" id="btn-add" style="margin-top:16px;" disabled>Ajouter le technicien</button>
+      </div>
+
+      <!-- LIST -->
+      <div class="block">
+        <div class="block-title">Techniciens sur la carte <span id="tech-count" style="color:var(--text-dim);font-weight:400;"></span></div>
+        <div id="tech-list"></div>
+        <div id="empty-state" class="empty-state">Aucun technicien pour l'instant.<br>Utilisez le formulaire ci-dessus pour en ajouter un.</div>
+      </div>
+
+      <div class="footer-actions">
+        <button class="btn btn-ghost" id="btn-export">⬇️ Exporter</button>
+        <button class="btn btn-ghost" id="btn-import">⬆️ Importer</button>
+        <input type="file" id="file-import" accept="application/json" style="display:none;">
+      </div>
+      <div class="footer-actions">
+        <button class="btn btn-danger-outline" id="btn-clear">🗑️ Tout effacer</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div class="place-banner" id="place-banner">
+      <span class="dot"></span> Cliquez sur la carte pour positionner le technicien
+      <button id="cancel-place">Annuler</button>
+    </div>
+    <div class="stat-pill" id="stat-pill">
+      <b id="stat-count">0</b> technicien(s) affiché(s)
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================= STATE ============================= */
+const PALETTE = ["#4C8DFF","#33C481","#E8A33D","#E5586B","#B36CE2","#28C7C7","#EF7D3C","#7A8CFF"];
+let colorIndex = 0;
+let selectedColor = PALETTE[0];
+let currentMode = "km"; // 'km' | 'time'
+let currentPoint = null; // {lat, lng, cityLabel}
+let placingOnMap = false;
+let previewMarker = null;
+let technicians = []; // {id, name, city, lat, lng, mode, value, color, visible, layers:{marker,zone}}
+let idSeq = 1;
+
+/* ============================= MAP ============================= */
+const map = L.map('map', {zoomControl:true}).setView([46.6, 2.4], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18
+}).addTo(map);
+
+const zonesGroup = L.layerGroup().addTo(map);
+const markersGroup = L.layerGroup().addTo(map);
+
+/* ============================= COLOR SWATCHES ============================= */
+const colorsetEl = document.getElementById('colorset');
+PALETTE.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'swatch' + (i === 0 ? ' selected' : '');
+  sw.style.background = c;
+  sw.dataset.color = c;
+  sw.addEventListener('click', () => {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+    sw.classList.add('selected');
+    selectedColor = c;
+  });
+  colorsetEl.appendChild(sw);
+});
+
+/* ============================= MODE TOGGLE ============================= */
+const modeKmBtn = document.getElementById('mode-km');
+const modeTimeBtn = document.getElementById('mode-time');
+const valueLabel = document.getElementById('value-label');
+const fValue = document.getElementById('f-value');
+
+modeKmBtn.addEventListener('click', () => setMode('km'));
+modeTimeBtn.addEventListener('click', () => setMode('time'));
+
+function setMode(mode){
+  currentMode = mode;
+  modeKmBtn.classList.toggle('active', mode === 'km');
+  modeTimeBtn.classList.toggle('active', mode === 'time');
+  if(mode === 'km'){
+    valueLabel.textContent = "Rayon en kilomètres";
+    fValue.value = 100;
+  } else {
+    valueLabel.textContent = "Temps de trajet en voiture (minutes)";
+    fValue.value = 30;
+  }
+}
+
+/* ============================= ADVANCED API BOX ============================= */
+const apiToggle = document.getElementById('api-toggle');
+const apiBox = document.getElementById('api-box');
+apiToggle.addEventListener('click', () => apiBox.classList.toggle('open'));
+
+/* ============================= LOCATE STATUS ============================= */
+const statusEl = document.getElementById('locate-status');
+function setStatus(text, type){
+  statusEl.textContent = text;
+  statusEl.className = 'locate-status ' + type;
+}
+
+const btnAdd = document.getElementById('btn-add');
+function refreshAddButton(){
+  btnAdd.disabled = !(currentPoint && document.getElementById('f-name').value.trim());
+}
+document.getElementById('f-name').addEventListener('input', refreshAddButton);
+
+/* ============================= PREVIEW MARKER ============================= */
+function setPreview(lat, lng, label){
+  currentPoint = {lat, lng, cityLabel: label};
+  if(previewMarker) map.removeLayer(previewMarker);
+  previewMarker = L.circleMarker([lat, lng], {
+    radius: 9, color:'#fff', weight:2, fillColor: '#10182B', fillOpacity:1
+  }).addTo(map);
+  map.setView([lat, lng], Math.max(map.getZoom(), 8), {animate:true});
+  refreshAddButton();
+}
+
+/* ============================= SEARCH CITY (Nominatim) ============================= */
+document.getElementById('btn-search-city').addEventListener('click', async () => {
+  const city = document.getElementById('f-city').value.trim();
+  if(!city){ setStatus("Entrez d'abord un nom de ville.", 'err'); return; }
+  setStatus("Recherche de « " + city + " »…", 'wait');
+  try{
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=fr&q=${encodeURIComponent(city + ', France')}`;
+    const res = await fetch(url, {headers:{'Accept-Language':'fr'}});
+    const data = await res.json();
+    if(!data || !data.length){
+      setStatus("Ville introuvable. Essayez un nom plus précis.", 'err');
+      return;
+    }
+    const {lat, lon, display_name} = data[0];
+    setPreview(parseFloat(lat), parseFloat(lon), city);
+    setStatus("Position trouvée : " + display_name.split(',').slice(0,2).join(','), 'ok');
+  }catch(e){
+    setStatus("Erreur réseau lors de la recherche.", 'err');
+  }
+});
+
+/* ============================= PLACE ON MAP MODE ============================= */
+const banner = document.getElementById('place-banner');
+document.getElementById('btn-place-map').addEventListener('click', () => {
+  placingOnMap = true;
+  document.getElementById('map').classList.add('placing');
+  banner.classList.add('show');
+});
+document.getElementById('cancel-place').addEventListener('click', stopPlacing);
+function stopPlacing(){
+  placingOnMap = false;
+  document.getElementById('map').classList.remove('placing');
+  banner.classList.remove('show');
+}
+
+map.on('click', async (e) => {
+  if(!placingOnMap) return;
+  const {lat, lng} = e.latlng;
+  stopPlacing();
+  setPreview(lat, lng, null);
+  setStatus("Position placée sur la carte. Recherche du nom de la ville…", 'wait');
+  try{
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`;
+    const res = await fetch(url, {headers:{'Accept-Language':'fr'}});
+    const data = await res.json();
+    const label = data?.address?.city || data?.address?.town || data?.address?.village || data?.address?.municipality || data?.display_name?.split(',')[0] || "Lieu sélectionné";
+    document.getElementById('f-city').value = label;
+    currentPoint.cityLabel = label;
+    setStatus("Position : " + label, 'ok');
+  }catch(err){
+    setStatus("Position placée (ville non identifiée automatiquement).", 'ok');
+  }
+});
+
+/* ============================= ADD TECHNICIAN ============================= */
+document.getElementById('btn-add').addEventListener('click', async () => {
+  const name = document.getElementById('f-name').value.trim();
+  const city = document.getElementById('f-city').value.trim() || currentPoint.cityLabel || "—";
+  const value = parseFloat(fValue.value);
+  if(!name || !currentPoint || !value || value <= 0) return;
+
+  const tech = {
+    id: idSeq++,
+    name, city,
+    lat: currentPoint.lat, lng: currentPoint.lng,
+    mode: currentMode, value, color: selectedColor,
+    visible: true, isEstimate: false,
+    layers: {marker:null, zone:null}
+  };
+  technicians.push(tech);
+  colorIndex = (colorIndex + 1) % PALETTE.length;
+  selectedColor = PALETTE[colorIndex];
+  document.querySelectorAll('.swatch').forEach((s,i) => s.classList.toggle('selected', i === colorIndex));
+
+  await drawTechnician(tech);
+  renderList();
+  resetForm();
+});
+
+function resetForm(){
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-city').value = '';
+  currentPoint = null;
+  if(previewMarker){ map.removeLayer(previewMarker); previewMarker = null; }
+  setStatus("Indiquez une ville ou cliquez sur la carte pour positionner le technicien.", 'idle');
+  refreshAddButton();
+}
+
+/* ============================= DRAW ON MAP ============================= */
+async function drawTechnician(tech){
+  if(tech.layers.marker) markersGroup.removeLayer(tech.layers.marker);
+  if(tech.layers.zone) zonesGroup.removeLayer(tech.layers.zone);
+  tech.layers.marker = null;
+  tech.layers.zone = null;
+  if(!tech.visible) return;
+
+  const marker = L.circleMarker([tech.lat, tech.lng], {
+    radius: 7, color:'#fff', weight:2, fillColor: tech.color, fillOpacity:1
+  }).bindPopup(`<div class="popup-title">${escapeHtml(tech.name)}</div><div class="popup-sub">${escapeHtml(tech.city)} — ${tech.mode === 'km' ? tech.value + ' km' : tech.value + ' min de trajet'}</div>`);
+  marker.addTo(markersGroup);
+  tech.layers.marker = marker;
+
+  if(tech.mode === 'km'){
+    const circle = L.circle([tech.lat, tech.lng], {
+      radius: tech.value * 1000,
+      color: tech.color, weight: 2, fillColor: tech.color, fillOpacity: 0.14
+    }).addTo(zonesGroup);
+    tech.layers.zone = circle;
+    tech.isEstimate = false;
+  } else {
+    const apiKey = document.getElementById('f-orskey').value.trim();
+    if(apiKey){
+      try{
+        const zone = await fetchIsochrone(tech.lat, tech.lng, tech.value, apiKey, tech.color);
+        tech.layers.zone = zone;
+        tech.isEstimate = false;
+      }catch(e){
+        tech.layers.zone = drawEstimateCircle(tech);
+        tech.isEstimate = true;
+      }
+    } else {
+      tech.layers.zone = drawEstimateCircle(tech);
+      tech.isEstimate = true;
+    }
+  }
+}
+
+function drawEstimateCircle(tech){
+  const km = estimateRadiusFromMinutes(tech.value);
+  return L.circle([tech.lat, tech.lng], {
+    radius: km * 1000,
+    color: tech.color, weight: 2, dashArray: '6 6',
+    fillColor: tech.color, fillOpacity: 0.10
+  }).addTo(zonesGroup);
+}
+
+function estimateRadiusFromMinutes(minutes){
+  let speed; // km/h, tiered average speed for French road network
+  if(minutes <= 15) speed = 35;
+  else if(minutes <= 30) speed = 50;
+  else if(minutes <= 60) speed = 65;
+  else speed = 80;
+  return (minutes / 60) * speed;
+}
+
+async function fetchIsochrone(lat, lng, minutes, apiKey, color){
+  const res = await fetch('https://api.openrouteservice.org/v2/isochrones/driving-car', {
+    method: 'POST',
+    headers: {
+      'Authorization': apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      locations: [[lng, lat]],
+      range: [minutes * 60],
+      range_type: 'time'
+    })
+  });
+  if(!res.ok) throw new Error('ORS request failed');
+  const geojson = await res.json();
+  return L.geoJSON(geojson, {
+    style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.16 }
+  }).addTo(zonesGroup);
+}
+
+/* ============================= LIST RENDER ============================= */
+function renderList(){
+  const listEl = document.getElementById('tech-list');
+  const emptyEl = document.getElementById('empty-state');
+  listEl.innerHTML = '';
+  emptyEl.style.display = technicians.length ? 'none' : 'block';
+  document.getElementById('tech-count').textContent = technicians.length ? `(${technicians.length})` : '';
+  document.getElementById('stat-count').textContent = technicians.filter(t=>t.visible).length;
+
+  technicians.forEach(tech => {
+    const card = document.createElement('div');
+    card.className = 'tech-card';
+    const rayonLabel = tech.mode === 'km'
+      ? `${tech.value} km`
+      : `${tech.value} min${tech.isEstimate ? ' (estimé)' : ''}`;
+    card.innerHTML = `
+      <div class="tech-card-top">
+        <div class="tech-dot" style="background:${tech.color}"></div>
+        <div class="tech-name">${escapeHtml(tech.name)}</div>
+      </div>
+      <div class="tech-meta">${escapeHtml(tech.city)} · <b>${rayonLabel}</b></div>
+      <div class="tech-actions">
+        <button class="icon-btn ${tech.visible ? 'on' : ''}" data-act="toggle" data-id="${tech.id}">${tech.visible ? '👁️ Visible' : '🚫 Masqué'}</button>
+        <button class="icon-btn" data-act="focus" data-id="${tech.id}">🎯 Centrer</button>
+        <button class="icon-btn danger" data-act="delete" data-id="${tech.id}">🗑️ Retirer</button>
+      </div>
+    `;
+    listEl.appendChild(card);
+  });
+
+  listEl.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.id);
+      const act = btn.dataset.act;
+      const tech = technicians.find(t => t.id === id);
+      if(!tech) return;
+      if(act === 'toggle'){
+        tech.visible = !tech.visible;
+        drawTechnician(tech).then(renderList);
+      } else if(act === 'focus'){
+        map.setView([tech.lat, tech.lng], 9, {animate:true});
+        if(tech.layers.marker) tech.layers.marker.openPopup();
+      } else if(act === 'delete'){
+        if(tech.layers.marker) markersGroup.removeLayer(tech.layers.marker);
+        if(tech.layers.zone) zonesGroup.removeLayer(tech.layers.zone);
+        technicians = technicians.filter(t => t.id !== id);
+        renderList();
+      }
+    });
+  });
+}
+
+/* ============================= EXPORT / IMPORT ============================= */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const data = technicians.map(({id,name,city,lat,lng,mode,value,color,visible}) => ({id,name,city,lat,lng,mode,value,color,visible}));
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'zones-intervention.json';
+  a.click();
+});
+
+document.getElementById('btn-import').addEventListener('click', () => document.getElementById('file-import').click());
+document.getElementById('file-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try{
+      const data = JSON.parse(evt.target.result);
+      // clear current
+      technicians.forEach(t => {
+        if(t.layers.marker) markersGroup.removeLayer(t.layers.marker);
+        if(t.layers.zone) zonesGroup.removeLayer(t.layers.zone);
+      });
+      technicians = data.map(d => ({...d, layers:{marker:null, zone:null}}));
+      idSeq = Math.max(0, ...technicians.map(t => t.id)) + 1;
+      for(const tech of technicians){ await drawTechnician(tech); }
+      renderList();
+    }catch(err){
+      alert("Fichier invalide.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if(!technicians.length) return;
+  if(!confirm("Retirer tous les techniciens de la carte ?")) return;
+  technicians.forEach(t => {
+    if(t.layers.marker) markersGroup.removeLayer(t.layers.marker);
+    if(t.layers.zone) zonesGroup.removeLayer(t.layers.zone);
+  });
+  technicians = [];
+  renderList();
+});
+
+/* ============================= HELPERS ============================= */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+renderList();
+</script>
+</body>
+</html>
